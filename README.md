@@ -8,5 +8,5 @@ Tested here:
 https://canary.discord.com/channels/333949691962195969/826699940750295070/871796166906482814
 
 Screenshots
-![Help command](!https://i.imgur.com/zyKv7xN.png)
+![Help command](https://i.imgur.com/zyKv7xN.png)
 
