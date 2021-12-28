@@ -1,245 +1,139 @@
-///////////////MODULES///////////////
-/////////////////////////////////////
-const config = require("./config.json");
-/////////////////////////////////////
-//BOT CODED BY: Tomato#6966//////////
-//DO NOT SHARE WITHOUT CREDITS!//////
-/////////////////////////////////////
-const {
-    Client,
-    Collection
-} = require("discord.js");
-const Discord = require('discord.js');
-const fs = require("fs");
-const DisTube = require("distube");
-require('canvas').registerFont("Genta.ttf", {
-    family: "Genta"
-}); //loading a font
-//creating the client
-const client = new Client({
+const Discord = require("discord.js");
+const config = require(`./botconfig/config.json`);
+const settings = require(`./botconfig/settings.json`);
+const filters = require(`./botconfig/filters.json`);
+const colors = require("colors");
+const Enmap = require("enmap");
+const libsodium = require("libsodium-wrappers");
+const ffmpeg = require("ffmpeg-static");
+const voice = require("@discordjs/voice");
+const DisTube = require("distube").default;
+const https = require('https-proxy-agent');
+const client = new Discord.Client({
     fetchAllMembers: false,
-    restTimeOffset: 0,
+    //restTimeOffset: 0,
+    //restWsBridgetimeout: 100,
     shards: "auto",
-    disableEveryone: true
+    //shardCount: 5,
+    allowedMentions: {
+      parse: [ ],
+      repliedUser: false,
+    },
+    failIfNotExists: false,
+    partials: ['MESSAGE', 'CHANNEL', 'REACTION'],
+    intents: [ 
+        Discord.Intents.FLAGS.GUILDS,
+        //Discord.Intents.FLAGS.GUILD_MEMBERS,
+        Discord.Intents.FLAGS.GUILD_MESSAGES,
+        Discord.Intents.FLAGS.GUILD_VOICE_STATES,
+        //Discord.Intents.FLAGS.GUILD_BANS,
+        //Discord.Intents.FLAGS.GUILD_EMOJIS_AND_STICKERS,
+        //Discord.Intents.FLAGS.GUILD_INTEGRATIONS,
+        //Discord.Intents.FLAGS.GUILD_WEBHOOKS,
+        //Discord.Intents.FLAGS.GUILD_INVITES,
+        //Discord.Intents.FLAGS.GUILD_PRESENCES,
+        //Discord.Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
+        //Discord.Intents.FLAGS.GUILD_MESSAGE_TYPING,
+        //Discord.Intents.FLAGS.DIRECT_MESSAGES,
+        //Discord.Intents.FLAGS.DIRECT_MESSAGE_REACTIONS,
+        //Discord.Intents.FLAGS.DIRECT_MESSAGE_TYPING
+    ],
+    presence: {
+      activity: {
+        name: `+help | musicium.eu`, 
+        type: "PLAYING", 
+      },
+      status: "online"
+    }
 });
-
-client.commands = new Collection();
-client.queue = new Map();
-client.aliases = new Collection();
-const cooldowns = new Collection();
-//audiosetups
 //BOT CODED BY: Tomato#6966
 //DO NOT SHARE WITHOUT CREDITS!
-const https = require('https-proxy-agent');
 const proxy = 'http://123.123.123.123:8080';
 const agent = https(proxy);
-client.distube = new DisTube(client, {
-    youtubeCookie: config.cookie,
-    requestOptions: {
-        agent
-    },
-    searchSongs: true,
-    emitNewSongOnly: true,
-    highWaterMark: 1024 * 1024 * 64,
-    leaveOnEmpty: true,
-    leaveOnFinish: true,
-    leaveOnStop: true,
-    searchSongs: false,
-    youtubeDL: true,
-    updateYouTubeDL: false,
-    customFilters: config.customs
-})
-client.setMaxListeners(0);
-require('events').defaultMaxListeners = 0;
-//Externalfiles setups
-client.categories = fs.readdirSync("./commands/");
-["command"].forEach(handler => {
-    require(`./handlers/${handler}`)(client);
-});
-require("./handlers/slashcommands")(client);
-//BOT CODED BY: Tomato#6966
-//DO NOT SHARE WITHOUT CREDITS!
-require("./handlers/setups")(client)
-const functions = require("./functions")
-//databases setups
-const Enmap = require("enmap");
-client.settings = new Enmap({
-    name: "settings",
-    dataDir: "./databases/settings"
-});
-client.infos = new Enmap({
-    name: "infos",
-    dataDir: "./databases/infos"
-});
-client.custom = new Enmap({
-    name: "custom",
-    dataDir: "./databases/playlist"
-});
-client.custom2 = new Enmap({
-    name: "custom",
-    dataDir: "./databases/playlist2"
-});
-function escapeRegex(str) {
-    try {
-      return str.replace(/[.*+?^${}()|[\]\\]/g, `\\$&`);
-    } catch (e) {
-      console.log(String(e.stack).bgRed)
-    }
+const { SpotifyPlugin } = require("@distube/spotify");
+const { SoundCloudPlugin } = require("@distube/soundcloud");
+let spotifyoptions = {
+  parallel: true,
+  emitEventsAfterFetching: true,
+}
+if(config.spotify_api.enabled){
+  spotifyoptions.api = {
+    clientId: config.spotify_api.clientId,
+    clientSecret: config.spotify_api.clientSecret,
   }
-//registering a command setup
-client.on("message", async message => {
-    if (message.author.bot) return;
-    if (!message.guild) return;
-    //GET THE PREFIX
-
-    let prefix = client.settings.get(message.guild.id, `prefix`);
-    if (prefix === null) prefix = config.prefix; //if not prefix set it to standard prefix in the config.json file
-    const prefixRegex = new RegExp(`^(<@!?${client.user.id}>|${escapeRegex(prefix)})\\s*`);
-    if (!prefixRegex.test(message.content)) return;
-    const [, matchedPrefix] = message.content.match(prefixRegex);
-    prefix = matchedPrefix;
-
-    if (!message.content.startsWith(prefix) && message.content.includes(client.user.id))
-        if (!message.guild.me.permissionsIn(message.channel).has("EMBED_LINKS"))
-            message.reply(new Discord.MessageEmbed().setColor(config.colors.yes).setAuthor(`${message.author.username}, My prefix is ${prefix}, to get started; type ${prefix}help`, message.author.displayAvatarURL({
-                dynamic: true
-            }), "https://dc.musicium.eu"));
-        else
-            message.reply(`${message.author.username}, My prefix is ${prefix}, to get started; type ${prefix}help`)
-    if (!message.content.startsWith(prefix)) return;
-
-    //if not allowed to send embeds, return that
-    if (!message.guild.me.permissionsIn(message.channel).has("EMBED_LINKS"))
-        return message.reply("**:x: I am missing the Permission to `EMBED_LINKS`**")
-
-    //CHECK IF IN A BOT CHANNEL OR NOT
-    if (client.settings.get(message.guild.id, `botchannel`).toString() !== "") {
-        if (!client.settings.get(message.guild.id, `botchannel`).includes(message.channel.id) && !message.member.hasPermission("ADMINISTRATOR")) {
-            let leftb = "";
-            for (let i = 0; i < client.settings.get(message.guild.id, `botchannel`).length; i++) {
-                leftb += "<#" + client.settings.get(message.guild.id, `botchannel`)[i] + "> / "
-            }
-            return functions.embedbuilder(client, 5000, message, config.colors.no, `Not in the Bot Chat!`, `There is a Bot chat setup in this GUILD! try using the Bot Commands here: 
-            > ${leftb}`)
-        }
-    }
-
-    const args = message.content.slice(prefix.length).trim().split(/ +/g);
-    const cmd = args.shift().toLowerCase();
-
-    if (cmd.length === 0) return;
-    let command = client.commands.get(cmd);
-    if (!command) command = client.commands.get(client.aliases.get(cmd));
-    if (command) {
-        if (!cooldowns.has(command.name)) {
-            cooldowns.set(command.name, new Collection());
-        }
-
-        const now = Date.now();
-        const timestamps = cooldowns.get(command.name);
-        const cooldownAmount = (command.cooldown || 2) * 1000;
-
-        if (timestamps.has(message.author.id)) {
-            const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
-
-            if (now < expirationTime) {
-                const timeLeft = (expirationTime - now) / 1000;
-                return message.reply(
-                    `Please wait ${timeLeft.toFixed(1)} more second(s) before reusing the \`${command.name}\` command.`
-                );
-            }
-        }
-
-        timestamps.set(message.author.id, now);
-        setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
-
-        client.infos.set("global", Number(client.infos.get("global", "cmds")) + 1, "cmds");
-
-        message.react("✅").catch(e => console.log("COULD NOT REACT F"))
-
-        try {
-            command.run(client, message, args);
-        } catch (error) {
-            console.error(error)
-            functions.embedbuilder(client, 5000, message, "RED", "ERROR: ", "```" + error.toString().substr(0, 100) + "```" + "\n\n**Error got sent to my owner!**")
-            functions.errorbuilder(error.stack.toString().substr(0, 2000))
-        }
-    } else
-        return message.reply(`Unkown command, try: ${prefix}help`)
-});
-
-client.login(config.token);
-
-
-
-//BOT CODED BY: Tomato#6966
-//DO NOT SHARE WITHOUT CREDITS!
-process.on('unhandledRejection', (reason, p) => {
-    console.log('=== unhandled Rejection ==='.toUpperCase());
-});
-process.on("uncaughtException", (err, origin) => {
-    console.log('=== uncaught Exception ==='.toUpperCase());
+}
+client.distube = new DisTube(client, {
+  emitNewSongOnly: false,
+  leaveOnEmpty: true,
+  leaveOnFinish: true,
+  leaveOnStop: true,
+  savePreviousSongs: true,
+  emitAddSongWhenCreatingQueue: false,
+  //emitAddListWhenCreatingQueue: false,
+  searchSongs: 0,
+  youtubeCookie: config.youtubeCookie,     //Comment this line if you dont want to use a youtube Cookie 
+  nsfw: false, //Set it to false if u want to disable nsfw songs
+  emptyCooldown: 25,
+  ytdlOptions: {
+    requestOptions: {
+      agent
+    },
+    highWaterMark: 1024 * 1024 * 64,
+    quality: "highestaudio",
+    format: "audioonly",
+    liveBuffer: 60000,
+    dlChunkSize: 1024 * 1024 * 4,
+  },
+  youtubeDL: true,
+  updateYouTubeDL: true,
+  customFilters: filters,
+  plugins: [
+    new SpotifyPlugin(spotifyoptions),
+    new SoundCloudPlugin()
+  ]
 })
-process.on('uncaughtExceptionMonitor', (err, origin) => {
-    console.log('=== uncaught Exception Monitor ==='.toUpperCase());
-});
+//Define some Global Collections
+client.commands = new Discord.Collection();
+client.cooldowns = new Discord.Collection();
+client.slashCommands = new Discord.Collection();
+client.aliases = new Discord.Collection();
+client.categories = require("fs").readdirSync(`./commands`);
+client.allEmojis = require("./botconfig/emojis.json");
+client.maps = new Map();
 
-//BOT CODED BY: Tomato#6966
-//DO NOT SHARE WITHOUT CREDITS!
-process.on('beforeExit', (code) => {
-    console.log('=== before Exit ==='.toUpperCase());
-});
-process.on('exit', (code) => {
-    console.log('=== exit ==='.toUpperCase());
-});
-process.on('multipleResolves', (type, promise, reason) => {
-    console.log('=== multiple Resolves ==='.toUpperCase());
-});
+client.setMaxListeners(100); require('events').defaultMaxListeners = 100;
 
+client.settings = new Enmap({ name: "settings",dataDir: "./databases/settings"});
+client.infos = new Enmap({ name: "infos", dataDir: "./databases/infos"});
+client.autoresume = new Enmap({ name: "autoresume", dataDir: "./databases/infos"});
 
-//BOT CODED BY: Tomato#6966
-//DO NOT SHARE WITHOUT CREDITS!
+//Require the Handlers                  Add the antiCrash file too, if its enabled
+["events", "commands", "slashCommands", settings.antiCrash ? "antiCrash" : null, "distubeEvent"]
+    .filter(Boolean)
+    .forEach(h => {
+        require(`./handlers/${h}`)(client);
+    })
+//Start the Bot
+client.login(config.token)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//BOT CODED BY: Tomato#6966
-//DO NOT SHARE WITHOUT CREDITS!
+/**
+ * @INFO
+ * Bot Coded by Tomato#6966 | https://discord.gg/milrato
+ * @INFO
+ * Work for Milrato Development | https://milrato.eu
+ * @INFO
+ * Please mention Him / Milrato Development, when using this Code!
+ * @INFO
+ */
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//BOT CODED BY: Tomato#6966
-//DO NOT SHARE WITHOUT CREDITS!
+/**
+ * @LOAD_THE_DASHBOARD - Loading the Dashbaord Module with the BotClient into it!
+ */
+client.on("ready", () => {
+  require("./dashboard/index.js")(client);
+})
